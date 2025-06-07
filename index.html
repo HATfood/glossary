@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>واژه‌نامه تخصصی شرکت هستی آرین تامین</title>
+    <title>واژه‌نامه تخصصی شرکت</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -61,7 +61,7 @@
         }
 
         .search-container {
-            margin-bottom: 40px;
+            margin-bottom: 20px;
             position: relative;
         }
 
@@ -91,6 +91,40 @@
             opacity: 0.5;
         }
 
+        /* --- NEW STYLES FOR FILTER BUTTONS --- */
+        .filter-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 40px;
+        }
+
+        .filter-btn {
+            background-color: var(--card-bg-color);
+            color: var(--text-color);
+            border: 2px solid var(--light-gray);
+            padding: 8px 20px;
+            font-family: 'Vazirmatn', sans-serif;
+            font-size: 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+        }
+        
+        .filter-btn:hover {
+            background-color: var(--light-gray);
+            border-color: #bdc3c7;
+        }
+
+        .filter-btn.active {
+            background-color: var(--secondary-color);
+            color: white;
+            border-color: var(--secondary-color);
+            font-weight: 500;
+        }
+        /* --- END OF NEW STYLES --- */
+
         #glossary-container {
             display: flex;
             flex-direction: column;
@@ -102,7 +136,15 @@
             border-radius: var(--border-radius);
             box-shadow: var(--shadow);
             overflow: hidden;
+            /* Added for smooth filtering animation */
+            transition: opacity 0.4s, transform 0.4s;
         }
+        
+        /* Class to hide units when filtering */
+        .unit-group.hidden {
+            display: none;
+        }
+
 
         .unit-title {
             background-color: var(--primary-color);
@@ -172,12 +214,17 @@
     <div class="container">
         <header>
             <img src="logo.png" alt="لوگو شرکت" class="logo">
-            <h1>واژه‌نامه تخصصی شرکت هستی آرین تامین</h1>
+            <h1>واژه‌نامه تخصصی شرکت</h1>
         </header>
 
         <main>
             <div class="search-container">
                 <input type="text" id="search-input" placeholder="جستجوی اصطلاح یا تعریف...">
+            </div>
+
+            <!-- NEW: Filter Buttons Container -->
+            <div id="filter-container" class="filter-container">
+                <!-- Buttons will be dynamically added here -->
             </div>
 
             <div id="glossary-container">
@@ -186,7 +233,7 @@
         </main>
         
         <footer>
-            <p>طراحی و توسعه برای بهبود ارتباطات داخلی توسط واحد مارکتینگ</p>
+            <p>طراحی و توسعه برای بهبود ارتباطات داخلی</p>
         </footer>
     </div>
 
@@ -194,10 +241,11 @@
         document.addEventListener('DOMContentLoaded', () => {
             const glossaryContainer = document.getElementById('glossary-container');
             const searchInput = document.getElementById('search-input');
+            const filterContainer = document.getElementById('filter-container'); // NEW
             const loadingElement = document.getElementById('loading');
             let allTerms = [];
+            let allUnits = [];
 
-            // 1. Fetch data from JSON file
             async function fetchGlossaryData() {
                 try {
                     const response = await fetch('glossary.json');
@@ -205,14 +253,29 @@
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
                     allTerms = await response.json();
+                    
+                    // NEW: Extract unique units and sort them
+                    const units = [...new Set(allTerms.map(term => term['واحد']))];
+                    allUnits = units.sort((a, b) => a.localeCompare(b, 'fa'));
+
+                    renderFilterButtons(); // NEW
                     renderGlossary(allTerms);
+                    setupEventListeners();
                 } catch (error) {
                     console.error("Error fetching glossary data:", error);
                     glossaryContainer.innerHTML = `<div id="no-results">خطا در بارگذاری اطلاعات. لطفاً از وجود فایل glossary.json و صحت ساختار آن اطمینان حاصل کنید.</div>`;
                 }
             }
 
-            // 2. Group terms by unit
+            // NEW: Function to render filter buttons
+            function renderFilterButtons() {
+                let buttonsHTML = `<button class="filter-btn active" data-unit="all">همه</button>`;
+                allUnits.forEach(unit => {
+                    buttonsHTML += `<button class="filter-btn" data-unit="${unit}">${unit}</button>`;
+                });
+                filterContainer.innerHTML = buttonsHTML;
+            }
+            
             function groupTermsByUnit(terms) {
                 return terms.reduce((acc, term) => {
                     const unit = term['واحد'];
@@ -224,9 +287,10 @@
                 }, {});
             }
 
-            // 3. Render glossary on the page
-            function renderGlossary(terms) {
-                if (loadingElement) loadingElement.remove();
+            function renderGlossary(terms, selectedUnit = 'all') {
+                if (loadingElement && loadingElement.parentElement) {
+                    loadingElement.remove();
+                }
                 glossaryContainer.innerHTML = '';
 
                 if (terms.length === 0) {
@@ -236,17 +300,21 @@
 
                 const groupedTerms = groupTermsByUnit(terms);
                 
-                // Sort units alphabetically
                 const sortedUnits = Object.keys(groupedTerms).sort((a, b) => a.localeCompare(b, 'fa'));
 
                 for (const unit of sortedUnits) {
                     const unitGroup = document.createElement('div');
                     unitGroup.className = 'unit-group';
+                    unitGroup.setAttribute('data-unit-group', unit); // For easy filtering
 
-                    let termsHTML = '';
-                    // Sort terms within each unit alphabetically
+                    // NEW: Hide unit group if it doesn't match the filter
+                    if (selectedUnit !== 'all' && unit !== selectedUnit) {
+                        unitGroup.classList.add('hidden');
+                    }
+
                     const sortedTermsInUnit = groupedTerms[unit].sort((a,b) => a['اصطلاح'].localeCompare(b['اصطلاح'], 'fa'));
 
+                    let termsHTML = '';
                     sortedTermsInUnit.forEach(term => {
                         termsHTML += `
                             <div class="term-card">
@@ -267,28 +335,52 @@
                 }
             }
 
-            // 4. Setup search functionality
-            function setupSearch() {
-                searchInput.addEventListener('input', (e) => {
-                    const searchTerm = e.target.value.toLowerCase().trim();
-                    
-                    if (!searchTerm) {
-                        renderGlossary(allTerms);
-                        return;
-                    }
+            // Central function to apply filters
+            function applyFilters() {
+                const searchTerm = searchInput.value.toLowerCase().trim();
+                const activeFilterButton = filterContainer.querySelector('.filter-btn.active');
+                const selectedUnit = activeFilterButton ? activeFilterButton.dataset.unit : 'all';
 
-                    const filteredTerms = allTerms.filter(term => 
+                // First, filter by search term
+                let filteredBySearch = allTerms;
+                if (searchTerm) {
+                    filteredBySearch = allTerms.filter(term => 
                         term['اصطلاح'].toLowerCase().includes(searchTerm) || 
                         term['تعریف'].toLowerCase().includes(searchTerm)
                     );
-                    
-                    renderGlossary(filteredTerms);
+                }
+
+                // Then, filter the result by selected unit
+                let finalFilteredTerms = filteredBySearch;
+                if (selectedUnit !== 'all') {
+                    finalFilteredTerms = filteredBySearch.filter(term => term['واحد'] === selectedUnit);
+                }
+                
+                renderGlossary(finalFilteredTerms, selectedUnit);
+            }
+
+            function setupEventListeners() {
+                // Search functionality
+                searchInput.addEventListener('input', applyFilters);
+
+                // Filter buttons functionality
+                filterContainer.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('filter-btn')) {
+                        // Remove active class from all buttons
+                        filterContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+                        // Add active class to the clicked button
+                        e.target.classList.add('active');
+                        
+                        // Clear search input for a cleaner UX when changing filter
+                        searchInput.value = '';
+
+                        applyFilters();
+                    }
                 });
             }
 
             // Initial load
             fetchGlossaryData();
-            setupSearch();
         });
     </script>
 
